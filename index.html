@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ARTSGIS · geogenealogie</title>
+  <link rel="stylesheet" href="https://js.arcgis.com/4.32/esri/themes/light/main.css" />
+  <link rel="stylesheet" href="geogenealogie_arbre.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">ARTSGIS · geogenealogie</div>
+    <div class="actions">
+      <p id="statut" role="status"></p>
+      <button type="button" id="btn-tout" disabled>Tout afficher</button>
+    </div>
+  </header>
+  <div id="banniere-demo" hidden>Mode démo — données fictives, aucun individu réel</div>
+  <main>
+    <section id="panneau-arbre" aria-label="Arbre de filiation">
+      <div id="arbre"></div>
+    </section>
+    <section id="panneau-carte" aria-label="Carte">
+      <div id="carte"></div>
+      <p id="carte-note" hidden></p>
+    </section>
+  </main>
+  <script src="https://js.arcgis.com/4.32/"></script>
+  <script src="geogenealogie_arbre.js"></script>
+</body>
+</html>

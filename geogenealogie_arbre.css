@@ -1,0 +1,195 @@
+:root {
+  --navy: #0A2F5C;
+  --bleu: #1E6FB8;
+  --orange: #E0662A;
+  --fond: #F5F6F8;
+  --branche-b: #4A9BB5;
+  --branche-d: #C48A2A;
+  --texte: #0A2F5C;
+  --muet: #5a6b7d;
+  --ligne: #d5dbe3;
+  --carte-fond: #e6e8eb;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--fond);
+  color: var(--texte);
+  font-family: "Avenir Next", Avenir, "Century Gothic", "Segoe UI", sans-serif;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 1rem;
+  background: var(--navy);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.brand {
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-size: 1.05rem;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  min-width: 0;
+}
+
+#statut {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #d7e4f2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 42vw;
+}
+
+#btn-tout {
+  appearance: none;
+  border: 0;
+  background: var(--orange);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.85rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#btn-tout:hover:not(:disabled) { filter: brightness(1.08); }
+#btn-tout:disabled { opacity: 0.45; cursor: default; }
+#btn-tout:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+
+#banniere-demo {
+  flex-shrink: 0;
+  background: var(--orange);
+  color: #fff;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.75rem;
+  letter-spacing: 0.02em;
+}
+
+#banniere-demo[hidden],
+#carte-note[hidden] { display: none; }
+
+main {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+#panneau-arbre,
+#panneau-carte {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+#panneau-arbre {
+  flex: 0 0 46%;
+  border-right: 1px solid var(--ligne);
+  background: var(--fond);
+  overflow: auto;
+}
+
+#arbre { min-height: 100%; }
+
+#panneau-carte { flex: 1 1 54%; background: var(--carte-fond); }
+#carte { position: absolute; inset: 0; }
+
+#carte-note {
+  position: absolute;
+  z-index: 1;
+  left: 0.6rem;
+  bottom: 0.6rem;
+  margin: 0;
+  background: rgba(10, 47, 92, 0.86);
+  color: #fff;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.55rem;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.arbre-svg { display: block; margin: 0 auto; }
+
+.lien {
+  fill: none;
+  stroke-width: 1.6;
+  opacity: 0.7;
+}
+
+.lien.actif { stroke-width: 2.4; opacity: 1; }
+.lien.attenue { opacity: 0.12; }
+
+.case {
+  cursor: pointer;
+}
+
+.case rect {
+  fill: #fff;
+  stroke: var(--ligne);
+  stroke-width: 1;
+}
+
+.case .barre { stroke: none; }
+
+.case .nom {
+  font-size: 11px;
+  font-weight: 600;
+  fill: var(--navy);
+}
+
+.case .annee {
+  font-size: 10px;
+  fill: var(--muet);
+}
+
+.case:hover rect { stroke: var(--bleu); }
+.case:focus { outline: none; }
+.case:focus rect,
+.case.actif rect {
+  stroke: var(--orange);
+  stroke-width: 2.2;
+}
+
+.case.actif { filter: drop-shadow(0 1px 3px rgba(10, 47, 92, 0.28)); }
+.case.attenue { opacity: 0.28; }
+
+.msg {
+  padding: 2rem 1.25rem;
+  color: var(--muet);
+  font-size: 0.95rem;
+  line-height: 1.45;
+  max-width: 28rem;
+}
+
+@media (max-width: 860px) {
+  main { flex-direction: column; }
+  #panneau-arbre {
+    flex: 0 0 48vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--ligne);
+  }
+  #statut { max-width: 50vw; }
+}
