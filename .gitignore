@@ -1,0 +1,6 @@
+# Données privées : ne jamais versionner dans ce dépôt public
+sources_privees/
+data/
+*.xlsx
+*.csv
+*.geojson

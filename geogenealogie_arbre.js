@@ -9,11 +9,7 @@ const SERVICE_URL =
   "https://services8.arcgis.com/oi4y3kiOYSwRlxqD/arcgis/rest/services/geogenealogie_lieux/FeatureServer";
 const WEBMAP_ID = "93a058400dea4a37926cfb6f0d80bf00";
 
-const COULEURS_BRANCHE = {
-  proband: "#0A2F5C"
-};
-
-const ORDRE_BRANCHES = ["proband"]; // autres branches : couleur portée par la donnée (champ couleur), aucun prénom en dur
+/* Couleur des cases : champ attributaire `couleur` (aucune clé nominative en dur). */
 
 const BOX_W = 148;
 const BOX_H = 54;
@@ -38,9 +34,10 @@ let exprsOrigine = new Map();
 let vueCarte = null;
 let etendueInitiale = null;
 
-function couleurBranche(branche, secours) {
-  const cle = String(branche || "").trim().toLowerCase();
-  return COULEURS_BRANCHE[cle] || secours || "#1E6FB8";
+function couleurPersonne(p) {
+  const c = p && p.couleur;
+  if (c && String(c).trim()) return String(c).trim();
+  return "#1E6FB8";
 }
 
 function estVivant(valeur) {
@@ -126,7 +123,10 @@ function agregerPersonnes(entites) {
       branche_gp: a.branche_gp,
       annee: a.annee,
       est_vivant: a.est_vivant,
-      type_evt: a.type_evt
+      type_evt: a.type_evt,
+      id_pere: a.id_pere == null || a.id_pere === "" ? null : String(a.id_pere),
+      id_mere: a.id_mere == null || a.id_mere === "" ? null : String(a.id_mere),
+      couleur: a.couleur
     };
     const deja = parId.get(cle);
     if (!deja) {
@@ -151,6 +151,9 @@ function agregerPersonnes(entites) {
       if (!estVivant(deja.est_vivant)) deja.annee = rec.annee;
     }
     if (estVivant(rec.est_vivant)) deja.est_vivant = rec.est_vivant;
+    if (rec.id_pere) deja.id_pere = rec.id_pere;
+    if (rec.id_mere) deja.id_mere = rec.id_mere;
+    if (rec.couleur) deja.couleur = rec.couleur;
   }
   return Array.from(parId.values());
 }
@@ -168,6 +171,25 @@ function lireLiens(entites) {
     vus.add(cle);
     out.push({ id_parent: p, id_enfant: e });
   }
+  return out;
+}
+
+
+function liensDepuisAttributs(liste, liensCouche) {
+  const out = [];
+  const vus = new Set();
+  const ajouter = (p, e) => {
+    if (p === null || p === undefined || p === "" || e === null || e === undefined || e === "") return;
+    const cle = String(p) + "->" + String(e);
+    if (vus.has(cle)) return;
+    vus.add(cle);
+    out.push({ id_parent: String(p), id_enfant: String(e) });
+  };
+  for (const pers of liste) {
+    ajouter(pers.id_pere, pers.id_personne);
+    ajouter(pers.id_mere, pers.id_personne);
+  }
+  for (const l of liensCouche || []) ajouter(l.id_parent, l.id_enfant);
   return out;
 }
 
@@ -194,9 +216,65 @@ function filiationDirecte(id, index) {
 
 /* ---------- Disposition de l'arbre ---------- */
 
-function ordreBranche(b) {
-  const i = ORDRE_BRANCHES.indexOf(String(b || "").trim().toLowerCase());
-  return i === -1 ? 50 : i;
+function atteint(enfantsDe, depart, but) {
+  const objectif = String(but);
+  const vus = new Set();
+  const file = [String(depart)];
+  while (file.length) {
+    const x = file.shift();
+    if (x === objectif) return true;
+    if (vus.has(x)) continue;
+    vus.add(x);
+    for (const c of enfantsDe.get(x) || []) file.push(String(c));
+  }
+  return false;
+}
+
+function cleLignee(id, parId, parentsDe, enfantsDe, racine) {
+  const cle = [];
+  let cur = String(id);
+  const garde = new Set();
+  while (!garde.has(cur)) {
+    garde.add(cur);
+    const enf = enfantsDe.get(cur) || [];
+    if (!enf.length) break;
+    const versRacine = enf.find((c) => atteint(enfantsDe, c, racine)) || enf[0];
+    const pars = parentsDe.get(String(versRacine)) || [];
+    const pere = pars.find((p) => {
+      const pers = parId.get(String(p));
+      return pers && String(pers.sexe).toUpperCase() === "M";
+    });
+    if (pere && String(pere) === cur) cle.push("0");
+    else if (pars.includes(cur) || pars.includes(String(cur))) cle.push("1");
+    else cle.push("1");
+    cur = String(versRacine);
+  }
+  return cle.join("");
+}
+
+function unitesGeneration(rangs, parentsDe, enfantsDe, parId) {
+  const pris = new Set();
+  const unites = [];
+  const parEnfant = new Map();
+  for (const p of rangs) {
+    for (const e of enfantsDe.get(String(p.id_personne)) || []) {
+      if (!parEnfant.has(e)) parEnfant.set(e, []);
+      parEnfant.get(e).push(p);
+    }
+  }
+  for (const membres of parEnfant.values()) {
+    if (membres.length < 2) continue;
+    const ids = membres.map((p) => String(p.id_personne));
+    if (ids.some((id) => pris.has(id))) continue;
+    const ordre = (p) => (String(p.sexe).toUpperCase() === "M" ? 0 : String(p.sexe).toUpperCase() === "F" ? 1 : 2);
+    const couple = membres.slice().sort((a, b) => ordre(a) - ordre(b) || String(a.id_personne).localeCompare(String(b.id_personne), "fr", { numeric: true }));
+    couple.forEach((p) => pris.add(String(p.id_personne)));
+    unites.push(couple);
+  }
+  for (const p of rangs) {
+    if (!pris.has(String(p.id_personne))) unites.push([p]);
+  }
+  return unites;
 }
 
 function disposer(liste, listeLiens) {
@@ -211,48 +289,44 @@ function disposer(liste, listeLiens) {
   const generations = Array.from(gens.keys()).sort((a, b) => a - b);
   const gMax = generations.length ? generations[generations.length - 1] : 0;
   const minEcart = BOX_W + GAP_X;
-
-  const comparer = (a, b) => {
-    const db = ordreBranche(a.branche_gp) - ordreBranche(b.branche_gp);
-    if (db) return db;
-    const enfantsA = (enfantsDe.get(String(a.id_personne)) || []).slice().sort();
-    const enfantsB = (enfantsDe.get(String(b.id_personne)) || []).slice().sort();
-    if (enfantsA[0] && enfantsB[0] && enfantsA[0] !== enfantsB[0]) {
-      return enfantsA[0] < enfantsB[0] ? -1 : 1;
-    }
-    const sexeOrdre = (s) =>
-      String(s).toUpperCase() === "M" ? 0 : String(s).toUpperCase() === "F" ? 1 : 2;
-    const ds = sexeOrdre(a.sexe) - sexeOrdre(b.sexe);
-    if (ds) return ds;
-    return String(a.id_personne).localeCompare(String(b.id_personne), "fr", { numeric: true });
-  };
+  const racine = [...liste].sort((a, b) => (a.generation || 0) - (b.generation || 0))[0];
+  const idRacine = racine ? String(racine.id_personne) : "1";
 
   const pos = new Map();
   for (let gi = generations.length - 1; gi >= 0; gi--) {
     const g = generations[gi];
     const y = PAD + (gMax - g) * (BOX_H + GAP_Y);
-    const rang = gens.get(g).slice().sort(comparer);
-    const cibles = rang.map((p, i) => {
-      const pars = (parentsDe.get(String(p.id_personne)) || [])
-        .map((id) => pos.get(String(id)))
-        .filter(Boolean);
-      const x = pars.length ? pars.reduce((s, q) => s + q.x, 0) / pars.length : null;
-      return { p, i, x };
+    const rangs = gens.get(g);
+    const unites = unitesGeneration(rangs, parentsDe, enfantsDe, parId);
+    const cibles = unites.map((membres, i) => {
+      const ids = membres.map((p) => String(p.id_personne));
+      const pars = ids.flatMap((id) => parentsDe.get(id) || []);
+      const places = pars.map((id) => pos.get(String(id))).filter(Boolean);
+      const largeur = membres.length * BOX_W + (membres.length - 1) * GAP_X;
+      let x = null;
+      if (places.length) {
+        const mid = places.reduce((s, q) => s + q.x + BOX_W / 2, 0) / places.length;
+        x = mid - largeur / 2;
+      }
+      const cle = membres
+        .map((p) => cleLignee(p.id_personne, parId, parentsDe, enfantsDe, idRacine))
+        .sort()[0];
+      return { membres, i, x, largeur, cle };
     });
     cibles.sort((a, b) => {
-      if (a.x == null && b.x == null) return a.i - b.i;
-      if (a.x == null) return 1;
-      if (b.x == null) return -1;
-      return a.x - b.x || a.i - b.i;
+      if (a.cle !== b.cle) return a.cle < b.cle ? -1 : 1;
+      return a.i - b.i;
     });
     let dernier = PAD - minEcart;
     for (const c of cibles) {
       const souhait = c.x == null ? dernier + minEcart : c.x;
       c.x = Math.max(souhait, dernier + minEcart);
-      dernier = c.x;
+      dernier = c.x + c.largeur;
     }
     for (const c of cibles) {
-      pos.set(String(c.p.id_personne), { x: c.x, y, personne: c.p });
+      c.membres.forEach((p, j) => {
+        pos.set(String(p.id_personne), { x: c.x + j * minEcart, y, personne: p });
+      });
     }
   }
 
@@ -300,7 +374,7 @@ function dessinerArbre() {
     const personne = layout.parId.get(String(l.id_enfant)) || layout.parId.get(String(l.id_parent));
     path.setAttribute(
       "stroke",
-      couleurBranche(personne && personne.branche_gp, personne && personne.couleur)
+      couleurPersonne(personne)
     );
     path.setAttribute(
       "d",
@@ -314,7 +388,7 @@ function dessinerArbre() {
   gCases.setAttribute("class", "cases");
   for (const [id, p] of layout.pos) {
     const pers = p.personne;
-    const couleur = couleurBranche(pers.branche_gp, pers.couleur);
+    const couleur = couleurPersonne(pers);
     const g = document.createElementNS(ns, "g");
     g.setAttribute("class", "case");
     g.dataset.id = id;
@@ -601,21 +675,11 @@ async function demarrerReel() {
   await assurerConnexion(IdentityManager, OAuthInfo);
   setStatut("Chargement des données…");
   const [pts, fil] = await Promise.all([
-    interrogerCouche(FeatureLayer, SERVICE_URL + "/0", [
-      "id_personne",
-      "nom",
-      "prenoms",
-      "sexe",
-      "generation",
-      "branche_gp",
-      "annee",
-      "est_vivant",
-      "type_evt"
-    ]),
+    interrogerCouche(FeatureLayer, SERVICE_URL + "/0", ["*"]),
     interrogerCouche(FeatureLayer, SERVICE_URL + "/2", ["id_parent", "id_enfant"])
   ]);
   personnes = agregerPersonnes(pts);
-  liens = lireLiens(fil);
+  liens = liensDepuisAttributs(personnes, lireLiens(fil));
   dessinerArbre();
   setStatut(personnes.length + " personnes");
   elBtnTout.disabled = true;
@@ -626,7 +690,7 @@ async function demarrerDemo() {
   elBanniere.hidden = false;
   const data = donneesDemo();
   personnes = data.personnes;
-  liens = data.liens;
+  liens = liensDepuisAttributs(personnes, data.liens);
   dessinerArbre();
   setStatut("Démo — données fictives · " + personnes.length + " personnes");
   elCarteNote.hidden = false;
