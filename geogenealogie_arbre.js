@@ -28,7 +28,9 @@ const elCarteNote = document.getElementById("carte-note");
 
 let personnes = [];
 let liens = [];
+let evenementsMariage = [];
 let selectionIds = null;
+let selectionCible = null;
 let couchesCarte = [];
 let exprsOrigine = new Map();
 let vueCarte = null;
@@ -84,14 +86,15 @@ function donneesDemo() {
   });
   return {
     personnes: [
-      fictif("A", "A", "Personne", "F", 1, "Proband", 2000, 1, "#0A2F5C"),
+      Object.assign(fictif("A", "A", "Personne", "F", 1, "Proband", 2000, 1, "#0A2F5C"), { id_conjoint: "I" }),
       fictif("B", "B", "Personne", "M", 2, "Branche nord", 1970, 0, "#1E6FB8"),
       fictif("C", "C", "Personne", "F", 2, "Branche sud", 1972, 0, "#E0662A"),
       fictif("D", "D", "Personne", "M", 3, "Branche nord", 1945, 0, "#1E6FB8"),
       fictif("E", "E", "Personne", "F", 3, "Branche nord", 1948, 0, "#1E6FB8"),
       fictif("F", "F", "Personne", "M", 3, "Branche sud", 1946, 0, "#E0662A"),
       fictif("G", "G", "Personne", "F", 3, "Branche sud", 1949, 0, "#E0662A"),
-      fictif("H", "H", "Personne", "M", 0, "Proband", 2020, 1, "#0A2F5C")
+      fictif("H", "H", "Personne", "M", 0, "Proband", 2020, 1, "#0A2F5C"),
+      Object.assign(fictif("I", "I", "Personne", "M", 1, "Proband", 1998, 1, "#0A2F5C"), { id_conjoint: "A" })
     ],
     liens: [
       { id_parent: "D", id_enfant: "B" },
@@ -100,7 +103,12 @@ function donneesDemo() {
       { id_parent: "G", id_enfant: "C" },
       { id_parent: "B", id_enfant: "A" },
       { id_parent: "C", id_enfant: "A" },
-      { id_parent: "A", id_enfant: "H" }
+      { id_parent: "A", id_enfant: "H" },
+      { id_parent: "I", id_enfant: "H" }
+    ],
+    mariages: [
+      { id_personne: "A", type_evt: "mariage", annee: 2019, commune: "Demo" },
+      { id_personne: "I", type_evt: "mariage", annee: 2019, commune: "Demo" }
     ]
   };
 }
@@ -126,6 +134,7 @@ function agregerPersonnes(entites) {
       type_evt: a.type_evt,
       id_pere: a.id_pere == null || a.id_pere === "" ? null : String(a.id_pere),
       id_mere: a.id_mere == null || a.id_mere === "" ? null : String(a.id_mere),
+      id_conjoint: a.id_conjoint == null || a.id_conjoint === "" ? null : String(a.id_conjoint),
       couleur: a.couleur
     };
     const deja = parId.get(cle);
@@ -153,6 +162,7 @@ function agregerPersonnes(entites) {
     if (estVivant(rec.est_vivant)) deja.est_vivant = rec.est_vivant;
     if (rec.id_pere) deja.id_pere = rec.id_pere;
     if (rec.id_mere) deja.id_mere = rec.id_mere;
+    if (rec.id_conjoint) deja.id_conjoint = rec.id_conjoint;
     if (rec.couleur) deja.couleur = rec.couleur;
   }
   return Array.from(parId.values());
@@ -207,10 +217,67 @@ function indexFiliation(listeLiens) {
   return { parentsDe, enfantsDe };
 }
 
-function filiationDirecte(id, index) {
+function extraireMariages(entites) {
+  const out = [];
+  for (const f of entites || []) {
+    const a = f.attributes || f;
+    if (String(a.type_evt || "").toLowerCase() !== "mariage") continue;
+    if (a.id_personne === null || a.id_personne === undefined || a.id_personne === "") continue;
+    out.push({
+      id_personne: String(a.id_personne),
+      type_evt: "mariage",
+      date_evt: a.date_evt || "",
+      annee: a.annee,
+      commune: a.commune || ""
+    });
+  }
+  return out;
+}
+
+function indexConjoints(listeLiens, mariages) {
+  const conj = new Map();
+  const ajouter = (a, b) => {
+    if (a === null || a === undefined || a === "" || b === null || b === undefined || b === "") return;
+    const x = String(a);
+    const y = String(b);
+    if (x === y) return;
+    if (!conj.has(x)) conj.set(x, []);
+    if (!conj.has(y)) conj.set(y, []);
+    if (!conj.get(x).includes(y)) conj.get(x).push(y);
+    if (!conj.get(y).includes(x)) conj.get(y).push(x);
+  };
+  const { parentsDe, enfantsDe } = indexFiliation(listeLiens);
+  for (const enfants of enfantsDe.values()) {
+    for (const enfant of enfants) {
+      const pars = parentsDe.get(String(enfant)) || [];
+      for (let i = 0; i < pars.length; i++) {
+        for (let j = i + 1; j < pars.length; j++) ajouter(pars[i], pars[j]);
+      }
+    }
+  }
+  const groupes = new Map();
+  for (const ev of mariages || []) {
+    const dateCle = ev.date_evt || ev.annee;
+    if (dateCle === null || dateCle === undefined || dateCle === "") continue;
+    const cle = String(dateCle) + "|" + String(ev.commune || "");
+    if (!groupes.has(cle)) groupes.set(cle, []);
+    const id = String(ev.id_personne);
+    if (!groupes.get(cle).includes(id)) groupes.get(cle).push(id);
+  }
+  for (const ids of groupes.values()) {
+    if (ids.length === 2) ajouter(ids[0], ids[1]);
+  }
+  for (const pers of personnes || []) {
+    if (pers && pers.id_conjoint) ajouter(pers.id_personne, pers.id_conjoint);
+  }
+  return conj;
+}
+
+function entourage(id, index, conjoints) {
   const ids = new Set([String(id)]);
   for (const p of index.parentsDe.get(String(id)) || []) ids.add(String(p));
   for (const e of index.enfantsDe.get(String(id)) || []) ids.add(String(e));
+  for (const c of conjoints.get(String(id)) || []) ids.add(String(c));
   return Array.from(ids);
 }
 
@@ -460,8 +527,10 @@ function dessinerArbre() {
 
 function appliquerSurbrillance() {
   const actif = selectionIds ? new Set(selectionIds.map(String)) : null;
+  const cible = selectionCible != null ? String(selectionCible) : null;
   elArbre.querySelectorAll(".case").forEach((n) => {
     n.classList.toggle("actif", !!(actif && actif.has(n.dataset.id)));
+    n.classList.toggle("cible", !!(cible && n.dataset.id === cible));
     n.classList.toggle("attenue", !!(actif && !actif.has(n.dataset.id)));
   });
   elArbre.querySelectorAll(".lien").forEach((n) => {
@@ -478,6 +547,9 @@ function couchesCibles(layer) {
   if (!layer || layer.type !== "feature") return null;
   const url = String(layer.url || "");
   const champs = (layer.fields || []).map((f) => f.name);
+  if (champs.includes("id_personne_1") && champs.includes("id_personne_2")) {
+    return "conjoint";
+  }
   if (/\/FeatureServer\/2$/i.test(url) || (champs.includes("id_parent") && champs.includes("id_enfant"))) {
     return "filiation";
   }
@@ -492,6 +564,9 @@ function expressionFiltre(ids, type) {
   const liste = citerIds(ids);
   if (type === "filiation") {
     return `id_parent IN (${liste}) AND id_enfant IN (${liste})`;
+  }
+  if (type === "conjoint") {
+    return `id_personne_1 IN (${liste}) AND id_personne_2 IN (${liste})`;
   }
   return `id_personne IN (${liste})`;
 }
@@ -538,10 +613,12 @@ async function appliquerFiltreCarte(ids) {
 
 function selectionner(id) {
   const index = indexFiliation(liens);
-  selectionIds = filiationDirecte(id, index);
+  const conjoints = indexConjoints(liens, evenementsMariage);
+  selectionCible = String(id);
+  selectionIds = entourage(id, index, conjoints);
   const cible = personnes.find((p) => String(p.id_personne) === String(id));
   const nom = cible ? libellePersonne(cible) : "";
-  setStatut(nom ? "Filiation directe de " + nom : "Filiation directe");
+  setStatut(nom ? "Parents, conjoint et enfants de " + nom : "Parents, conjoint et enfants");
   elBtnTout.disabled = false;
   appliquerSurbrillance();
   appliquerFiltreCarte(selectionIds);
@@ -549,6 +626,7 @@ function selectionner(id) {
 
 function toutAfficher() {
   selectionIds = null;
+  selectionCible = null;
   setStatut(personnes.length ? personnes.length + " personnes" : "");
   elBtnTout.disabled = true;
   appliquerSurbrillance();
@@ -679,6 +757,7 @@ async function demarrerReel() {
     interrogerCouche(FeatureLayer, SERVICE_URL + "/2", ["id_parent", "id_enfant"])
   ]);
   personnes = agregerPersonnes(pts);
+  evenementsMariage = extraireMariages(pts);
   liens = liensDepuisAttributs(personnes, lireLiens(fil));
   dessinerArbre();
   setStatut(personnes.length + " personnes");
@@ -690,6 +769,7 @@ async function demarrerDemo() {
   elBanniere.hidden = false;
   const data = donneesDemo();
   personnes = data.personnes;
+  evenementsMariage = extraireMariages(data.mariages || []);
   liens = liensDepuisAttributs(personnes, data.liens);
   dessinerArbre();
   setStatut("Démo — données fictives · " + personnes.length + " personnes");

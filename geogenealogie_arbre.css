@@ -173,7 +173,13 @@ main {
   stroke-width: 2.2;
 }
 
+.case.cible rect {
+  stroke: var(--orange);
+  stroke-width: 2.8;
+}
+
 .case.actif { filter: drop-shadow(0 1px 3px rgba(10, 47, 92, 0.28)); }
+.case.cible { filter: drop-shadow(0 2px 5px rgba(224, 102, 42, 0.45)); }
 .case.attenue { opacity: 0.28; }
 
 .msg {
@@ -193,3 +199,39 @@ main {
   }
   #statut { max-width: 50vw; }
 }
+
+#legende-lignes {
+  position: absolute;
+  z-index: 1;
+  right: 0.6rem;
+  top: 0.6rem;
+  margin: 0;
+  padding: 0.4rem 0.6rem;
+  list-style: none;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--ligne);
+  border-radius: 4px;
+  color: var(--navy);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  box-shadow: 0 1px 4px rgba(10, 47, 92, 0.12);
+}
+
+#legende-lignes li {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.leg-trait {
+  display: inline-block;
+  width: 1.45rem;
+  height: 0;
+  flex: 0 0 1.45rem;
+  border-top-width: 2px;
+  border-top-color: var(--bleu);
+}
+
+.leg-filiation { border-top-style: solid; }
+.leg-conjoint { border-top-style: dotted; border-top-color: #7A2A8C; border-top-width: 3px; }
+.leg-vie { border-top-style: dashed; }
